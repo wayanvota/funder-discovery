@@ -117,6 +117,107 @@ const intakeFields = [
 ];
 
 const emptyProfile = Object.fromEntries(intakeFields.map((field) => [field.field, ""]));
+const fieldLabels = Object.fromEntries(intakeFields.map((field) => [field.field, field.label]));
+
+function textValue(value) {
+  return String(value ?? "").trim();
+}
+
+function wordCount(value) {
+  return textValue(value).split(/\s+/).filter(Boolean).length;
+}
+
+function isGenericGeography(value) {
+  return ["global", "national", "international", "usa", "us", "united states"].includes(
+    textValue(value).toLowerCase()
+  );
+}
+
+function evaluateIntake(profile) {
+  const fieldFeedback = {};
+  const errors = [];
+  const warnings = [];
+
+  function add(field, severity, message) {
+    const item = {
+      field,
+      label: fieldLabels[field] || field,
+      severity,
+      message
+    };
+    fieldFeedback[field] = item;
+    if (severity === "error") {
+      errors.push(item);
+    } else {
+      warnings.push(item);
+    }
+  }
+
+  if (wordCount(profile.name) < 1) {
+    add("name", "error", "Enter the public name a funder can recognize.");
+  }
+
+  const entityType = textValue(profile.entityType).toLowerCase();
+  if (!entityType) {
+    add("entityType", "error", "Say whether this is a US 501(c)(3), fiscal sponsorship, or non-US NGO.");
+  } else if (!/(501|public charity|fiscal|sponsor|ngo|nonprofit|charity)/.test(entityType)) {
+    add("entityType", "warning", "Add the legal status. The public version is strongest for US 501(c)(3)s.");
+  }
+
+  const annualBudget = Number(profile.annualBudget || 0);
+  if (!annualBudget) {
+    add("annualBudget", "warning", "Add a rough annual budget so ask-size risk can be judged.");
+  }
+
+  if (wordCount(profile.geography) < 2) {
+    add("geography", "error", "Name the countries, states, counties, cities, or region served.");
+  } else if (isGenericGeography(profile.geography)) {
+    add("geography", "warning", "Generic geography produces generic funders. Add specific places served.");
+  }
+
+  if (wordCount(profile.targetPopulation) < 5) {
+    add("targetPopulation", "error", "Name who benefits, not just the issue area.");
+  }
+
+  if (wordCount(profile.programFocus) < 6) {
+    add("programFocus", "error", "Describe the program model and outcome in funder language.");
+  }
+
+  if (wordCount(profile.fundingUse) < 5) {
+    add("fundingUse", "error", "Say what grant dollars would pay for.");
+  }
+
+  const askAmount = Number(profile.askAmount || 0);
+  if (!askAmount) {
+    add("askAmount", "error", "Enter the target ask so the tool can flag unrealistic grant sizes.");
+  } else if (annualBudget && askAmount > annualBudget * 0.35) {
+    add("askAmount", "warning", "This ask is more than 35% of the annual budget. Expect ask-size risk warnings.");
+  }
+
+  if (wordCount(profile.projectStage) < 2) {
+    add("projectStage", "warning", "Add the stage of work so funders are matched to pilot, scale, research, or capital needs.");
+  }
+
+  if (wordCount(profile.evidenceLevel) < 5) {
+    add("evidenceLevel", "warning", "List outcomes, evaluations, partners, prior grants, or say where proof is thin.");
+  }
+
+  if (wordCount(profile.relationshipAssets) < 4) {
+    add("relationshipAssets", "warning", "Name warm paths, peer grantees, board links, partners, or say none are known.");
+  }
+
+  const score = Math.max(0, 100 - errors.length * 14 - warnings.length * 6);
+  const status = errors.length ? "blocked" : warnings.length ? "usable" : "strong";
+
+  return {
+    errors,
+    warnings,
+    fieldFeedback,
+    score,
+    status,
+    canSubmit: errors.length === 0
+  };
+}
 
 function App() {
   const [profile, setProfile] = useState(emptyProfile);
@@ -132,6 +233,9 @@ function App() {
   const [filter, setFilter] = useState("All");
   const [activeTab, setActiveTab] = useState("Evidence");
   const [asks, setAsks] = useState({});
+  const [intakeAttempted, setIntakeAttempted] = useState(false);
+
+  const intakeQuality = useMemo(() => evaluateIntake(profile), [profile]);
 
   const enriched = useMemo(() => {
     return [...discoveredFunders]
@@ -191,11 +295,16 @@ function App() {
   }
 
   async function discoverFunders() {
-    const organizationName = String(profile.name || "").trim();
-    if (!organizationName) {
+    const quality = evaluateIntake(profile);
+    setIntakeAttempted(true);
+
+    if (!quality.canSubmit) {
       setDiscoveryState({
         status: "error",
-        message: "Enter an organization name before running discovery.",
+        message: `Improve the intake before discovery: ${quality.errors
+          .slice(0, 3)
+          .map((item) => item.message)
+          .join(" ")}`,
         source: null
       });
       return;
@@ -208,11 +317,19 @@ function App() {
     });
 
     try {
-      const response = await fetch(`${apiBase}/api/discover`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ profile })
-      });
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 80000);
+      let response;
+      try {
+        response = await fetch(`${apiBase}/api/discover`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ profile }),
+          signal: controller.signal
+        });
+      } finally {
+        window.clearTimeout(timeout);
+      }
       const payload = await response.json();
 
       if (!response.ok || !payload.ok) {
@@ -237,7 +354,10 @@ function App() {
       setSelectedId("");
       setDiscoveryState({
         status: "error",
-        message: error.message,
+        message:
+          error.name === "AbortError"
+            ? "Discovery took too long. Tighten the intake fields or try again with more specific geography and program details."
+            : error.message,
         source: "Render backend"
       });
       setPage("shortlist");
@@ -276,6 +396,8 @@ function App() {
         <IntakePage
           buckets={buckets}
           discoveryState={discoveryState}
+          intakeAttempted={intakeAttempted}
+          intakeQuality={intakeQuality}
           onContinue={discoverFunders}
           profile={profile}
           updateProfile={updateProfile}
@@ -319,7 +441,15 @@ function App() {
   );
 }
 
-function IntakePage({ buckets, discoveryState, onContinue, profile, updateProfile }) {
+function IntakePage({
+  buckets,
+  discoveryState,
+  intakeAttempted,
+  intakeQuality,
+  onContinue,
+  profile,
+  updateProfile
+}) {
   return (
     <section className="page-card intake-page">
       <div className="page-hero">
@@ -336,6 +466,8 @@ function IntakePage({ buckets, discoveryState, onContinue, profile, updateProfil
           {intakeFields.map((field) => (
             <IntakeField
               config={field}
+              feedback={intakeQuality.fieldFeedback[field.field]}
+              intakeAttempted={intakeAttempted}
               key={field.field}
               profile={profile}
               updateProfile={updateProfile}
@@ -365,6 +497,8 @@ function IntakePage({ buckets, discoveryState, onContinue, profile, updateProfil
             <p>{scopeNote}</p>
           </section>
 
+          <ProfileQualityPanel intakeQuality={intakeQuality} />
+
           <section className="brief-card">
             <p className="section-label">Current model read</p>
             <p className={`status-line ${discoveryState.status}`}>{discoveryState.message}</p>
@@ -391,12 +525,50 @@ function IntakePage({ buckets, discoveryState, onContinue, profile, updateProfil
   );
 }
 
-function IntakeField({ config, profile, updateProfile }) {
+function ProfileQualityPanel({ intakeQuality }) {
+  const headline =
+    intakeQuality.status === "strong"
+      ? "Strong enough for discovery"
+      : intakeQuality.status === "usable"
+        ? "Usable, but sharpen it"
+        : "Needs better data";
+  const guidance = [...intakeQuality.errors, ...intakeQuality.warnings].slice(0, 5);
+
+  return (
+    <section className={`quality-panel ${intakeQuality.status}`}>
+      <div className="quality-header">
+        <div>
+          <p className="section-label">Profile quality</p>
+          <h3>{headline}</h3>
+        </div>
+        <strong>{intakeQuality.score}</strong>
+      </div>
+      {guidance.length ? (
+        <ul>
+          {guidance.map((item) => (
+            <li className={item.severity} key={`${item.field}-${item.message}`}>
+              <span>{item.label}</span>
+              {item.message}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>
+          The intake has enough specificity for the backend to search by mission,
+          geography, ask size, evidence, and relationship path.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function IntakeField({ config, feedback, intakeAttempted, profile, updateProfile }) {
   const value = profile[config.field] ?? "";
   const id = `field-${config.field}`;
   const placeholder = String(organization[config.field] ?? "");
+  const shouldShowFeedback = feedback && (intakeAttempted || value !== "");
   return (
-    <label className="field-block" htmlFor={id}>
+    <label className={`field-block ${shouldShowFeedback ? feedback.severity : ""}`} htmlFor={id}>
       <span>{config.label}</span>
       <small>{config.helper}</small>
       {config.multiline ? (
@@ -417,6 +589,7 @@ function IntakeField({ config, profile, updateProfile }) {
           onChange={(event) => updateProfile(config.field, event.target.value)}
         />
       )}
+      {shouldShowFeedback && <em className={`field-feedback ${feedback.severity}`}>{feedback.message}</em>}
     </label>
   );
 }
