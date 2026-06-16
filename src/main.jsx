@@ -39,6 +39,9 @@ const coreChecks = [
 const seedFundersNote =
   "This public prototype currently reranks a curated 990-backed seed set. It does not yet search Kindora, ProPublica, IRS, or foundation sites for new funders.";
 
+const scopeNote =
+  "Intended scope: US 501(c)(3)s working in the US and US 501(c)(3)s working overseas. Current prototype caveat: overseas work can be entered, but the shortlist is only a seed-set reranking until backend discovery searches international funders and geography rules.";
+
 const intakeFields = [
   {
     field: "name",
@@ -49,7 +52,7 @@ const intakeFields = [
   {
     field: "entityType",
     label: "Legal status",
-    helper: "Example: 501(c)(3), fiscally sponsored project, public agency, NGO outside the US.",
+    helper: "Example: US 501(c)(3) working in the US, US 501(c)(3) working overseas, fiscally sponsored project, or non-US NGO.",
     type: "text"
   },
   {
@@ -282,6 +285,12 @@ function IntakePage({ buckets, onContinue, profile, updateProfile }) {
             </div>
           </section>
 
+          <section className="scope-panel">
+            <p className="section-label">Who this is for</p>
+            <h3>US nonprofits at home or overseas</h3>
+            <p>{scopeNote}</p>
+          </section>
+
           <section className="brief-card">
             <p className="section-label">Current model read</p>
             <div className="bucket-grid compact">
@@ -470,10 +479,12 @@ function SeedSetWarning({ profile }) {
       <p className="section-label">Prototype limitation</p>
       <h3>This is not a complete funder search yet</h3>
       <p>
-        Your intake points to international or South Asia work, but the current
-        public prototype only reranks the seed funders already in the app. A real
-        version needs the Render backend to query funder data sources and return a
-        new shortlist before scoring.
+        A US 501(c)(3) working overseas can use the finished tool, but this
+        public prototype is not a complete overseas funder search. Your intake
+        points to international or South Asia work, and the current prototype only
+        reranks the seed funders already in the app. A real version needs the
+        Render backend to query funder data sources and return a new shortlist
+        before scoring.
       </p>
     </section>
   );

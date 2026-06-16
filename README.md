@@ -14,6 +14,15 @@ Funder Discovery is a public-facing web app prototype for NGO leaders who need a
 - "Do not pursue" decision flags
 - Source links for Kindora, ProPublica Nonprofit Explorer, IRS Tax Exempt Organization Search, and foundation websites
 
+## Scope
+
+The intended product should support:
+
+- US 501(c)(3) nonprofits working in the US
+- US 501(c)(3) nonprofits working overseas
+
+The current public prototype accepts overseas-work inputs, but it is not yet a reliable international funder search. It reranks the seed funders in `src/data.js` and does not yet search Kindora, ProPublica, IRS filings, or foundation sites for new funders.
+
 ## Current Data Status
 
 This prototype uses a curated seed dataset in `src/data.js`. It is intentionally transparent and auditable: funder records include EINs, public source URLs, source notes, scoring dimensions, warnings, and decision logic.

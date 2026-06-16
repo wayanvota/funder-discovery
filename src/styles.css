@@ -306,6 +306,22 @@ button:active,
   margin-bottom: 0;
 }
 
+.scope-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.scope-panel h3 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.scope-panel p:last-child {
+  margin-bottom: 0;
+}
+
 .selection-panel h3 {
   font-size: 28px;
   margin-bottom: 12px;
