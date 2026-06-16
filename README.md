@@ -1,11 +1,11 @@
 # Funder Discovery
 
-Funder Discovery is a public-facing web app prototype for NGO leaders who need a ranked shortlist of funders worth pursuing. The tool is designed to reduce wasted fundraising time by scoring funders against an NGO profile, surfacing 990-backed evidence, warning about guideline-vs-990 gaps, estimating ask ranges, and flagging prospects that should not be pursued.
+Funder Discovery is a public-facing web app for NGO leaders who need a ranked shortlist of funders worth pursuing. The tool is designed to reduce wasted fundraising time by discovering new funder candidates for a US 501(c)(3), scoring them against an NGO profile, surfacing 990-backed evidence, warning about guideline-vs-990 gaps, estimating ask ranges, and flagging prospects that should not be pursued.
 
 ## What It Shows
 
 - Page 1 intake that asks for enough NGO and project context to inform matching
-- Page 2 ranked funder shortlist with a visible selected funder for briefing
+- Page 2 dynamic funder discovery results with a visible selected funder for briefing
 - Page 3 selected funder brief with evidence, warnings, ask plan, sources, and a funder switcher
 - NGO-specific funder fit scoring
 - 990 and 990-PF-backed evidence fields
@@ -21,13 +21,13 @@ The intended product should support:
 - US 501(c)(3) nonprofits working in the US
 - US 501(c)(3) nonprofits working overseas
 
-The current public prototype accepts overseas-work inputs, but it is not yet a reliable international funder search. It reranks the seed funders in `src/data.js` and does not yet search Kindora, ProPublica, IRS filings, or foundation sites for new funders.
+The public tool is intended to discover new funders through the Render backend. It should not fall back to a static shortlist. If `OPENAI_API_KEY` is missing on Render, Page 2 shows a backend configuration error instead of pretending dummy funders are real results.
 
 ## Current Data Status
 
-This prototype uses a curated seed dataset in `src/data.js`. It is intentionally transparent and auditable: funder records include EINs, public source URLs, source notes, scoring dimensions, warnings, and decision logic.
+The frontend starts with no funders. Dynamic discovery happens through `POST /api/discover` on the Render backend. The backend calls the OpenAI Responses API with web search and asks for public evidence from foundation websites, ProPublica, IRS/990 references, Kindora pages when available, and public grant guidelines.
 
-The production version should replace or expand the seed data with an ingestion pipeline from:
+The production version should strengthen the live discovery pipeline with direct ingestion from:
 
 - ProPublica Nonprofit Explorer
 - IRS tax-exempt organization data and XML filings
@@ -91,12 +91,13 @@ Render backend settings:
 The backend currently exposes:
 
 - `GET /api/health`
+- `POST /api/discover`, dynamic funder discovery through OpenAI web search when configured
 - `POST /api/report`, reserved for future OpenAI-generated reports
 
-Set `OPENAI_API_KEY` in Render only after the report endpoint is implemented. Do not expose API keys in the browser.
+Set `OPENAI_API_KEY` in Render for dynamic funder discovery. Do not expose API keys in the browser. Optional: set `OPENAI_MODEL`; otherwise the backend uses `gpt-5.4-mini`.
 
 ## Audit Notes
 
-The funder ranking logic is deterministic and lives in `src/data.js`. The public frontend does not currently call an LLM or private API. This keeps the public prototype cheap to host and easy to audit.
+The browser does not call OpenAI directly. It calls the Render backend, and the backend handles dynamic discovery. Ranking and warnings still use deterministic scoring logic in `src/data.js` after funders are discovered.
 
-Before presenting the tool as production-grade, the data pipeline should add filing-year provenance, grant-recipient examples, confidence scoring for each extracted claim, and a "last verified" timestamp per funder.
+Before presenting the tool as production-grade, the data pipeline should add direct filing-year provenance, grant-recipient examples, confidence scoring for each extracted claim, caching, rate limits, and a "last verified" timestamp per funder.

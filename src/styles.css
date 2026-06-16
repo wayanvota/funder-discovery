@@ -250,6 +250,12 @@ button:active,
   color: #ffffff;
 }
 
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
 .secondary-action,
 .table-action {
   border: 1px solid var(--text);
@@ -310,6 +316,56 @@ button:active,
 
 .warning-panel p:last-child {
   margin-bottom: 0;
+}
+
+.empty-panel,
+.success-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.success-panel {
+  border-color: color-mix(in srgb, var(--good) 36%, var(--border));
+  background: color-mix(in srgb, var(--good) 7%, #ffffff);
+}
+
+.empty-panel h3,
+.success-panel h3 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.empty-panel p:last-child,
+.success-panel p:last-child {
+  margin-bottom: 0;
+}
+
+.table-empty {
+  margin-bottom: 0;
+}
+
+.status-line {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--muted-strong);
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.status-line.loading {
+  color: var(--warn);
+}
+
+.status-line.success {
+  color: var(--good);
+}
+
+.status-line.error {
+  color: var(--bad);
 }
 
 .scope-panel {

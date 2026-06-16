@@ -20,9 +20,10 @@
         <p class="section-label">About Funder Discovery</p>
         <h1>Find funders actually worth an NGO leader's time.</h1>
         <p>
-          Funder Discovery is a public prototype for building a defensible
-          funder shortlist from NGO context, public funder data, and 990-backed
-          evidence. The ranking is deterministic so the logic can be audited.
+          Funder Discovery is a public tool for building a defensible funder
+          shortlist from NGO context, public funder data, and 990-backed
+          evidence. The backend discovers candidates first, then the ranking
+          logic scores fit, warnings, and ask ranges.
         </p>
       </section>
 
@@ -32,9 +33,8 @@
           <p>
             The intended product should support US 501(c)(3) nonprofits working
             in the US and US 501(c)(3) nonprofits working overseas. The current
-            public prototype accepts overseas-work inputs, but it is not yet a
-            reliable international funder search because it reranks a small
-            curated seed set.
+            public version should not use a static shortlist. Overseas-work
+            searches still need explicit geography evidence for each funder.
           </p>
         </article>
         <article>
@@ -49,17 +49,18 @@
         <article>
           <h2>What it does not do yet</h2>
           <p>
-            This static version does not store user submissions, run live 990
-            ingestion, or call an AI model from the browser. A Render backend
-            can add generated reports later without exposing private API keys.
+            This static frontend does not store user submissions or call an AI
+            model from the browser. It sends discovery requests to the Render
+            backend, which needs an OpenAI API key for live funder discovery.
           </p>
         </article>
         <article>
           <h2>Data posture</h2>
           <p>
-            The current funder dataset is curated inside the source code for
-            auditability. A production version should add filing-year
-            provenance, recipient-level grant examples, and last-verified dates.
+            Dynamic discovery should use foundation websites, ProPublica, IRS
+            and 990 references, Kindora pages when available, and public grant
+            guidelines. A production version should add filing-year provenance,
+            recipient-level grant examples, and last-verified dates.
           </p>
         </article>
       </section>

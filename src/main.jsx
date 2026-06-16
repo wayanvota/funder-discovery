@@ -6,7 +6,6 @@ import {
   confidenceLabel,
   decisionFor,
   fitScore,
-  funders,
   guideline990Gap,
   money,
   organization,
@@ -29,6 +28,7 @@ const filters = [
   "Benchmark only"
 ];
 const coreChecks = [
+  "Live funder discovery",
   "NGO-specific fit",
   "990-backed evidence",
   "Guideline-vs-990 warnings",
@@ -36,11 +36,16 @@ const coreChecks = [
   "Do not pursue flags"
 ];
 
-const seedFundersNote =
-  "This public prototype currently reranks a curated 990-backed seed set. It does not yet search Kindora, ProPublica, IRS, or foundation sites for new funders.";
+const apiBase =
+  window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
+    ? "http://127.0.0.1:10000"
+    : "https://funder-discovery-api.onrender.com";
+
+const discoveryNote =
+  "This tool should discover new funders for each US 501(c)(3) profile, then rank them with 990-backed evidence, warnings, ask ranges, and do-not-pursue flags.";
 
 const scopeNote =
-  "Intended scope: US 501(c)(3)s working in the US and US 501(c)(3)s working overseas. Current prototype caveat: overseas work can be entered, but the shortlist is only a seed-set reranking until backend discovery searches international funders and geography rules.";
+  "Intended scope: US 501(c)(3)s working in the US and US 501(c)(3)s working overseas. The backend discovery step must search for eligible funders before scoring, especially when geography is international.";
 
 const intakeFields = [
   {
@@ -116,16 +121,20 @@ const emptyProfile = Object.fromEntries(intakeFields.map((field) => [field.field
 function App() {
   const [profile, setProfile] = useState(emptyProfile);
   const [page, setPage] = useState("intake");
-  const [selectedId, setSelectedId] = useState("chcf");
+  const [discoveredFunders, setDiscoveredFunders] = useState([]);
+  const [discoveryState, setDiscoveryState] = useState({
+    status: "idle",
+    message: "Enter an NGO profile, then run dynamic discovery.",
+    source: null
+  });
+  const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
   const [activeTab, setActiveTab] = useState("Evidence");
-  const [asks, setAsks] = useState(
-    Object.fromEntries(funders.map((funder) => [funder.id, funder.currentAsk]))
-  );
+  const [asks, setAsks] = useState({});
 
   const enriched = useMemo(() => {
-    return [...funders]
+    return [...discoveredFunders]
       .sort((a, b) => fitScore(b, profile) - fitScore(a, profile))
       .map((funder) => ({
         ...funder,
@@ -134,7 +143,7 @@ function App() {
         decision: decisionFor(funder, profile),
         gap: guideline990Gap(funder, profile)
       }));
-  }, [profile]);
+  }, [discoveredFunders, profile]);
 
   const filtered = enriched.filter((funder) => {
     const haystack = [
@@ -152,8 +161,8 @@ function App() {
     return matchesQuery && matchesFilter;
   });
 
-  const selected = enriched.find((funder) => funder.id === selectedId) ?? enriched[0];
-  const selectedAsk = asks[selected.id];
+  const selected = enriched.find((funder) => funder.id === selectedId) ?? enriched[0] ?? null;
+  const selectedAsk = selected ? asks[selected.id] ?? selected.currentAsk : 0;
   const buckets = filters
     .filter((item) => item !== "All")
     .map((item) => ({
@@ -171,6 +180,7 @@ function App() {
   }
 
   function updateAsk(value) {
+    if (!selected) return;
     setAsks((current) => ({ ...current, [selected.id]: Number(value) }));
   }
 
@@ -178,6 +188,60 @@ function App() {
     setSelectedId(id);
     setActiveTab("Evidence");
     setPage(nextPage);
+  }
+
+  async function discoverFunders() {
+    const organizationName = String(profile.name || "").trim();
+    if (!organizationName) {
+      setDiscoveryState({
+        status: "error",
+        message: "Enter an organization name before running discovery.",
+        source: null
+      });
+      return;
+    }
+
+    setDiscoveryState({
+      status: "loading",
+      message: "Searching for new funders and checking public evidence.",
+      source: null
+    });
+
+    try {
+      const response = await fetch(`${apiBase}/api/discover`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ profile })
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || "Dynamic discovery failed.");
+      }
+
+      setDiscoveredFunders(payload.funders);
+      setAsks(
+        Object.fromEntries(
+          payload.funders.map((funder) => [funder.id, funder.currentAsk ?? funder.askRange?.[0] ?? 0])
+        )
+      );
+      setSelectedId(payload.funders[0]?.id ?? "");
+      setDiscoveryState({
+        status: "success",
+        message: payload.message || `Found ${payload.funders.length} candidate funders.`,
+        source: payload.source || "Dynamic backend discovery"
+      });
+      setPage("shortlist");
+    } catch (error) {
+      setDiscoveredFunders([]);
+      setSelectedId("");
+      setDiscoveryState({
+        status: "error",
+        message: error.message,
+        source: "Render backend"
+      });
+      setPage("shortlist");
+    }
   }
 
   return (
@@ -211,7 +275,8 @@ function App() {
       {page === "intake" && (
         <IntakePage
           buckets={buckets}
-          onContinue={() => setPage("shortlist")}
+          discoveryState={discoveryState}
+          onContinue={discoverFunders}
           profile={profile}
           updateProfile={updateProfile}
         />
@@ -220,6 +285,7 @@ function App() {
       {page === "shortlist" && (
         <ShortlistPage
           buckets={buckets}
+          discoveryState={discoveryState}
           enriched={enriched}
           filter={filter}
           filtered={filtered}
@@ -234,22 +300,26 @@ function App() {
       )}
 
       {page === "brief" && (
-        <BriefPage
-          activeTab={activeTab}
-          enriched={enriched}
-          selected={selected}
-          selectedAsk={selectedAsk}
-          setActiveTab={setActiveTab}
-          setPage={setPage}
-          updateAsk={updateAsk}
-          chooseFunder={chooseFunder}
-        />
+        selected ? (
+          <BriefPage
+            activeTab={activeTab}
+            enriched={enriched}
+            selected={selected}
+            selectedAsk={selectedAsk}
+            setActiveTab={setActiveTab}
+            setPage={setPage}
+            updateAsk={updateAsk}
+            chooseFunder={chooseFunder}
+          />
+        ) : (
+          <EmptyBrief setPage={setPage} />
+        )
       )}
     </main>
   );
 }
 
-function IntakePage({ buckets, onContinue, profile, updateProfile }) {
+function IntakePage({ buckets, discoveryState, onContinue, profile, updateProfile }) {
   return (
     <section className="page-card intake-page">
       <div className="page-hero">
@@ -281,7 +351,7 @@ function IntakePage({ buckets, onContinue, profile, updateProfile }) {
               These fields affect mission match, geography eligibility, ask-size
               risk, relationship risk, and evidence confidence.
             </p>
-            <p className="model-note">{seedFundersNote}</p>
+            <p className="model-note">{discoveryNote}</p>
             <div className="proof-strip stacked" aria-label="Core funder discovery checks">
               {coreChecks.map((check) => (
                 <span key={check}>{check}</span>
@@ -297,6 +367,7 @@ function IntakePage({ buckets, onContinue, profile, updateProfile }) {
 
           <section className="brief-card">
             <p className="section-label">Current model read</p>
+            <p className={`status-line ${discoveryState.status}`}>{discoveryState.message}</p>
             <div className="bucket-grid compact">
               {buckets.map((bucket) => (
                 <div className="bucket readonly" key={bucket.label}>
@@ -305,8 +376,13 @@ function IntakePage({ buckets, onContinue, profile, updateProfile }) {
                 </div>
               ))}
             </div>
-            <button className="primary-action" onClick={onContinue} type="button">
-              Rank current funder set
+            <button
+              className="primary-action"
+              disabled={discoveryState.status === "loading"}
+              onClick={onContinue}
+              type="button"
+            >
+              {discoveryState.status === "loading" ? "Finding funders" : "Find new funders"}
             </button>
           </section>
         </aside>
@@ -347,6 +423,7 @@ function IntakeField({ config, profile, updateProfile }) {
 
 function ShortlistPage({
   buckets,
+  discoveryState,
   enriched,
   filter,
   filtered,
@@ -368,9 +445,10 @@ function ShortlistPage({
             Pick a funder to build the brief. The highlighted row is the funder
             currently selected for Page 3.
           </p>
-          <p className="model-note">{seedFundersNote}</p>
+          <p className="model-note">{discoveryNote}</p>
         </div>
         <div className="source-strip" aria-label="Primary data sources">
+          <span>Live web search</span>
           <span>IRS-derived</span>
           <span>990 / 990-PF</span>
           <span>ProPublica</span>
@@ -380,7 +458,7 @@ function ShortlistPage({
 
       <div className="shortlist-layout">
         <section className="shortlist-main">
-          <SeedSetWarning profile={profile} />
+          <DiscoveryNotice discoveryState={discoveryState} profile={profile} />
 
           <div className="bucket-grid">
             {buckets.map((bucket) => (
@@ -424,42 +502,56 @@ function ShortlistPage({
           />
         </section>
 
-        <aside className="selection-panel">
-          <p className="section-label">Selected for brief</p>
-          <h3>{selected.displayName}</h3>
-          <DecisionBanner funder={selected} />
-          <p>
-            Page 3 will explain the evidence, warnings, ask range, and next
-            action for this selected funder.
-          </p>
-          <div className="selected-actions">
-            <button className="secondary-action" onClick={() => setPage("intake")} type="button">
+        {selected ? (
+          <aside className="selection-panel">
+            <p className="section-label">Selected for brief</p>
+            <h3>{selected.displayName}</h3>
+            <DecisionBanner funder={selected} />
+            <p>
+              Page 3 will explain the evidence, warnings, ask range, and next
+              action for this selected funder.
+            </p>
+            <div className="selected-actions">
+              <button className="secondary-action" onClick={() => setPage("intake")} type="button">
+                Edit intake
+              </button>
+              <button className="primary-action" onClick={() => setPage("brief")} type="button">
+                View funder brief
+              </button>
+            </div>
+            <div className="mini-list" aria-label="Change selected funder">
+              {enriched.slice(0, 5).map((funder) => (
+                <button
+                  className={funder.id === selected.id ? "active" : ""}
+                  key={funder.id}
+                  onClick={() => chooseFunder(funder.id, "shortlist")}
+                  type="button"
+                >
+                  <span>{funder.displayName}</span>
+                  <strong>{funder.score}</strong>
+                </button>
+              ))}
+            </div>
+          </aside>
+        ) : (
+          <aside className="selection-panel">
+            <p className="section-label">No selected funder</p>
+            <h3>Run discovery first</h3>
+            <p>
+              The tool will not invent a shortlist from bundled dummy data. Enter
+              the NGO profile on Page 1 and run dynamic discovery.
+            </p>
+            <button className="primary-action" onClick={() => setPage("intake")} type="button">
               Edit intake
             </button>
-            <button className="primary-action" onClick={() => setPage("brief")} type="button">
-              View funder brief
-            </button>
-          </div>
-          <div className="mini-list" aria-label="Change selected funder">
-            {enriched.slice(0, 5).map((funder) => (
-              <button
-                className={funder.id === selected.id ? "active" : ""}
-                key={funder.id}
-                onClick={() => chooseFunder(funder.id, "shortlist")}
-                type="button"
-              >
-                <span>{funder.displayName}</span>
-                <strong>{funder.score}</strong>
-              </button>
-            ))}
-          </div>
-        </aside>
+          </aside>
+        )}
       </div>
     </section>
   );
 }
 
-function SeedSetWarning({ profile }) {
+function DiscoveryNotice({ discoveryState, profile }) {
   const profileText = [
     profile.geography,
     profile.targetPopulation,
@@ -479,25 +571,76 @@ function SeedSetWarning({ profile }) {
     "global"
   ].some((term) => profileText.includes(term));
 
-  if (!likelyOutsideSeed) return null;
+  if (discoveryState.status === "error") {
+    return (
+      <section className="warning-panel">
+        <p className="section-label">Dynamic discovery blocked</p>
+        <h3>The backend did not return new funders</h3>
+        <p>{discoveryState.message}</p>
+      </section>
+    );
+  }
+
+  if (discoveryState.status === "idle") {
+    return (
+      <section className="empty-panel">
+        <p className="section-label">No static shortlist</p>
+        <h3>Discovery has not run yet</h3>
+        <p>
+          This page now stays empty until the Render backend searches for new
+          funders for the NGO profile.
+        </p>
+      </section>
+    );
+  }
+
+  if (discoveryState.status === "loading") {
+    return (
+      <section className="empty-panel">
+        <p className="section-label">Searching</p>
+        <h3>Finding new funders</h3>
+        <p>{discoveryState.message}</p>
+      </section>
+    );
+  }
+
+  if (!likelyOutsideSeed) {
+    return (
+      <section className="success-panel">
+        <p className="section-label">Dynamic discovery</p>
+        <h3>New funders returned by the backend</h3>
+        <p>{discoveryState.message}</p>
+      </section>
+    );
+  }
 
   return (
-    <section className="warning-panel">
-      <p className="section-label">Prototype limitation</p>
-      <h3>This is not a complete funder search yet</h3>
+    <section className="success-panel">
+      <p className="section-label">International scope</p>
+      <h3>Overseas work requires geography evidence</h3>
       <p>
-        A US 501(c)(3) working overseas can use the finished tool, but this
-        public prototype is not a complete overseas funder search. Your intake
-        points to international or South Asia work, and the current prototype only
-        reranks the seed funders already in the app. A real version needs the
-        Render backend to query funder data sources and return a new shortlist
-        before scoring.
+        A US 501(c)(3) working overseas can use this workflow. The shortlist
+        still has to prove each funder funds the relevant geography, not just the
+        issue area.
       </p>
     </section>
   );
 }
 
 function FunderTable({ filtered, selected, chooseFunder }) {
+  if (!filtered.length) {
+    return (
+      <section className="empty-panel table-empty">
+        <p className="section-label">No funders yet</p>
+        <h3>No dynamic shortlist is available</h3>
+        <p>
+          The table will populate only after backend discovery returns candidate
+          funders with public evidence.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <div className="table-wrap">
       <table>
@@ -515,7 +658,7 @@ function FunderTable({ filtered, selected, chooseFunder }) {
         <tbody>
           {filtered.map((funder) => (
             <tr
-              className={funder.id === selected.id ? "selected" : ""}
+              className={funder.id === selected?.id ? "selected" : ""}
               key={funder.id}
               onClick={() => chooseFunder(funder.id)}
             >
@@ -623,6 +766,26 @@ function BriefPage({
           updateAsk={updateAsk}
         />
       </div>
+    </section>
+  );
+}
+
+function EmptyBrief({ setPage }) {
+  return (
+    <section className="page-card brief-page">
+      <header className="topbar split">
+        <div>
+          <p className="section-label">3. Funder brief</p>
+          <h2>No funder selected yet</h2>
+          <p>
+            A brief only exists after dynamic discovery returns funders and you
+            select one from the shortlist.
+          </p>
+        </div>
+        <button className="primary-action" onClick={() => setPage("intake")} type="button">
+          Start discovery
+        </button>
+      </header>
     </section>
   );
 }
@@ -785,21 +948,21 @@ function AskPlan({ funder }) {
 }
 
 function Sources({ funder }) {
+  const links = [
+    ["Kindora profile", funder.kindoraUrl],
+    ["ProPublica Nonprofit Explorer", funder.propublicaUrl],
+    ["Official evidence page", funder.officialEvidenceUrl],
+    ["IRS Tax Exempt Organization Search", funder.irsUrl]
+  ].filter(([, url]) => url);
+
   return (
     <div className="stack">
       <div className="source-links">
-        <a href={funder.kindoraUrl} target="_blank" rel="noreferrer">
-          Kindora profile
-        </a>
-        <a href={funder.propublicaUrl} target="_blank" rel="noreferrer">
-          ProPublica Nonprofit Explorer
-        </a>
-        <a href={funder.officialEvidenceUrl} target="_blank" rel="noreferrer">
-          Official evidence page
-        </a>
-        <a href={funder.irsUrl} target="_blank" rel="noreferrer">
-          IRS Tax Exempt Organization Search
-        </a>
+        {links.map(([label, url]) => (
+          <a href={url} key={label} target="_blank" rel="noreferrer">
+            {label}
+          </a>
+        ))}
       </div>
       {funder.sourceNotes.map((note) => (
         <Block key={note.label} title={note.label} body={note.value} />
