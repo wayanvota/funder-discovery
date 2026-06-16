@@ -42,20 +42,52 @@ npm run build
 
 The static build is emitted to `dist/`.
 
-## Render Deployment
+## Static Deployment On wayan.com
 
-This repo includes `render.yaml` for a Render Static Site.
+The public frontend should live on Wayan's existing website:
 
-Render build settings:
+`https://wayan.com/funder-discovery/`
 
-- Runtime: static
-- Build command: `npm ci && npm run build`
-- Publish path: `dist`
+Build the static site:
 
-Render can deploy the site from GitHub and redeploy automatically on commits to the default branch.
+```bash
+npm ci
+npm run build
+```
+
+Upload the contents of `dist/` to the FTP directory that serves:
+
+`/funder-discovery/`
+
+The build emits:
+
+- `dist/index.html` for the tool
+- `dist/about.html` for the about page
+- `dist/assets/` for JavaScript and CSS
+
+Do not upload `node_modules/`, source files, `.env` files, or the Render backend folder to FTP.
+
+## Render Backend Deployment
+
+This repo includes `render.yaml` for a Render backend service only. Render should not serve the public frontend.
+
+Render backend settings:
+
+- Runtime: Node
+- Root directory: `backend`
+- Build command: `npm install`
+- Start command: `npm start`
+- Health path: `/api/health`
+
+The backend currently exposes:
+
+- `GET /api/health`
+- `POST /api/report`, reserved for future OpenAI-generated reports
+
+Set `OPENAI_API_KEY` in Render only after the report endpoint is implemented. Do not expose API keys in the browser.
 
 ## Audit Notes
 
-The funder ranking logic is deterministic and lives in `src/data.js`. The UI does not currently call an LLM or private API. This keeps the public prototype cheap to host and easy to audit.
+The funder ranking logic is deterministic and lives in `src/data.js`. The public frontend does not currently call an LLM or private API. This keeps the public prototype cheap to host and easy to audit.
 
 Before presenting the tool as production-grade, the data pipeline should add filing-year provenance, grant-recipient examples, confidence scoring for each extracted claim, and a "last verified" timestamp per funder.

@@ -77,11 +77,12 @@ button:active,
 
 .step-nav {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 96px;
   gap: 10px;
 }
 
-.step-nav button {
+.step-nav button,
+.about-link {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-warm);
@@ -91,6 +92,14 @@ button:active,
   gap: 8px;
   text-align: left;
   cursor: pointer;
+}
+
+.about-link {
+  align-content: center;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+  font-size: 16px;
 }
 
 .step-nav button.active {
@@ -334,6 +343,93 @@ button:active,
 
 .full-brief {
   padding: 20px;
+}
+
+.static-page {
+  min-height: 100vh;
+  padding: 24px;
+  max-width: 1160px;
+  margin: 0 auto;
+}
+
+.static-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-oat);
+  padding: 16px;
+}
+
+.static-mark {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  background: var(--text);
+  color: #ffffff;
+  border-radius: 4px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.static-header nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.static-header nav a {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--text);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.static-header nav a[aria-current="page"] {
+  background: var(--text);
+  color: #ffffff;
+}
+
+.static-hero {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-warm);
+  padding: 24px;
+  margin: 18px 0;
+}
+
+.static-hero h1 {
+  max-width: 860px;
+  font-size: 64px;
+}
+
+.static-hero p {
+  max-width: 740px;
+  font-size: 18px;
+}
+
+.static-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.static-grid article {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.static-grid h2 {
+  font-size: 28px;
 }
 
 .app-shell {
@@ -1135,7 +1231,8 @@ input[type="range"] {
   }
 
   .step-nav,
-  .intake-form {
+  .intake-form,
+  .static-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1144,6 +1241,14 @@ input[type="range"] {
   }
 
   .page-hero h2 {
+    font-size: 40px;
+  }
+
+  .static-page {
+    padding: 14px;
+  }
+
+  .static-hero h1 {
     font-size: 40px;
   }
 

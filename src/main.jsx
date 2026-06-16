@@ -192,6 +192,9 @@ function App() {
               <strong>{item.title}</strong>
             </button>
           ))}
+          <a className="about-link" href="./about.html">
+            About
+          </a>
         </nav>
       </header>
 

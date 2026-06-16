@@ -19,9 +19,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build static site
+      - name: Build static FTP site
         run: npm run build
 
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: backend

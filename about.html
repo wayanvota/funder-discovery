@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About Funder Discovery</title>
+    <script type="module" src="/src/about.js"></script>
+  </head>
+  <body>
+    <main class="static-page">
+      <header class="static-header">
+        <a class="static-mark" href="./index.html">FD</a>
+        <nav>
+          <a href="./index.html">Tool</a>
+          <a aria-current="page" href="./about.html">About</a>
+        </nav>
+      </header>
+
+      <section class="static-hero">
+        <p class="section-label">About Funder Discovery</p>
+        <h1>Find funders actually worth an NGO leader's time.</h1>
+        <p>
+          Funder Discovery is a public prototype for building a defensible
+          funder shortlist from NGO context, public funder data, and 990-backed
+          evidence. The ranking is deterministic so the logic can be audited.
+        </p>
+      </section>
+
+      <section class="static-grid">
+        <article>
+          <h2>What it does</h2>
+          <p>
+            The tool asks for enough intake detail to evaluate mission fit,
+            geography, ask size, evidence strength, relationship risk, and
+            eligibility risk. It then ranks funders and produces a selected
+            funder brief with warnings and ask guidance.
+          </p>
+        </article>
+        <article>
+          <h2>What it does not do yet</h2>
+          <p>
+            This static version does not store user submissions, run live 990
+            ingestion, or call an AI model from the browser. A Render backend
+            can add generated reports later without exposing private API keys.
+          </p>
+        </article>
+        <article>
+          <h2>Data posture</h2>
+          <p>
+            The current funder dataset is curated inside the source code for
+            auditability. A production version should add filing-year
+            provenance, recipient-level grant examples, and last-verified dates.
+          </p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
