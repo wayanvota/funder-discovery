@@ -89,6 +89,102 @@ function slug(value, index) {
   );
 }
 
+const funderProperties = {
+  legalName: { type: "string" },
+  displayName: { type: "string" },
+  ein: { type: "string" },
+  city: { type: "string" },
+  state: { type: "string" },
+  type: { type: "string" },
+  sourceYear: { type: "string" },
+  assets: { type: "number" },
+  annualGrants: { type: "number" },
+  askRange: {
+    type: "array",
+    items: { type: "number" }
+  },
+  currentAsk: { type: "number" },
+  priorities: { type: "string" },
+  geography: { type: "string" },
+  eligibility: { type: "string" },
+  relationshipPath: { type: "string" },
+  evidence: { type: "string" },
+  strongest: { type: "string" },
+  weakest: { type: "string" },
+  likelyObjection: { type: "string" },
+  nextAction: { type: "string" },
+  doNotSubmit: { type: "string" },
+  tags: {
+    type: "array",
+    items: { type: "string" }
+  },
+  warnings: {
+    type: "array",
+    items: { type: "string" }
+  },
+  officialUrl: { type: "string" },
+  officialEvidenceUrl: { type: "string" },
+  kindoraUrl: { type: "string" },
+  propublicaUrl: { type: "string" },
+  irsUrl: { type: "string" },
+  sourceNotes: {
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        label: { type: "string" },
+        value: { type: "string" }
+      },
+      required: ["label", "value"],
+      additionalProperties: false
+    }
+  },
+  dimensions: {
+    type: "object",
+    properties: {
+      mission: { type: "number" },
+      geography: { type: "number" },
+      grantSize: { type: "number" },
+      evidence: { type: "number" },
+      history: { type: "number" },
+      eligibilityRisk: { type: "number" },
+      timing: { type: "number" },
+      relationship: { type: "number" },
+      confidence: { type: "number" }
+    },
+    required: [
+      "mission",
+      "geography",
+      "grantSize",
+      "evidence",
+      "history",
+      "eligibilityRisk",
+      "timing",
+      "relationship",
+      "confidence"
+    ],
+    additionalProperties: false
+  }
+};
+
+const funderDiscoverySchema = {
+  type: "object",
+  properties: {
+    message: { type: "string" },
+    funders: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: funderProperties,
+        required: Object.keys(funderProperties),
+        additionalProperties: false
+      }
+    }
+  },
+  required: ["message", "funders"],
+  additionalProperties: false
+};
+
 function normalizeFunder(raw, index) {
   const name = String(raw.displayName || raw.legalName || raw.name || `Funder ${index + 1}`);
   const minAsk = Number(raw.askRange?.[0] || raw.askMin || 50000);
@@ -155,7 +251,7 @@ function normalizeFunder(raw, index) {
 function buildDiscoveryPrompt(profile) {
   return `You are Funder Discovery, a strict funder research tool for US 501(c)(3) nonprofits.
 
-Find 6 to 8 NEW funders for this NGO. Do not use a preloaded seed shortlist. Use current web search. Prioritize public evidence from foundation websites, ProPublica Nonprofit Explorer, IRS/990 references, Kindora pages when available, and public grant guidelines.
+Find exactly 6 NEW funders for this NGO. Do not use a preloaded seed shortlist. Use current web search. Prioritize public evidence from foundation websites, ProPublica Nonprofit Explorer, IRS/990 references, Kindora pages when available, and public grant guidelines.
 
 NGO profile:
 ${JSON.stringify(profile, null, 2)}
@@ -245,11 +341,19 @@ async function discoverFunders(profile) {
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
         tools: [{ type: "web_search", search_context_size: "low" }],
-        max_output_tokens: 5000,
-        store: false,
-        input: buildDiscoveryPrompt(profile)
-      })
-    });
+      max_output_tokens: 6500,
+      store: false,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "funder_discovery_result",
+          strict: true,
+          schema: funderDiscoverySchema
+        }
+      },
+      input: buildDiscoveryPrompt(profile)
+    })
+  });
   } catch (error) {
     if (error.name === "AbortError") {
       const timeoutError = new Error("Dynamic discovery timed out. Try a narrower geography, clearer program focus, or run the search again.");
