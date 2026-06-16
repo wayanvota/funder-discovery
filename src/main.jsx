@@ -111,8 +111,10 @@ const intakeFields = [
   }
 ];
 
+const emptyProfile = Object.fromEntries(intakeFields.map((field) => [field.field, ""]));
+
 function App() {
-  const [profile, setProfile] = useState(organization);
+  const [profile, setProfile] = useState(emptyProfile);
   const [page, setPage] = useState("intake");
   const [selectedId, setSelectedId] = useState("chcf");
   const [query, setQuery] = useState("");
@@ -160,9 +162,11 @@ function App() {
     }));
 
   function updateProfile(field, value) {
+    const normalizedValue =
+      ["askAmount", "annualBudget"].includes(field) && value !== "" ? Number(value) : value;
     setProfile((current) => ({
       ...current,
-      [field]: ["askAmount", "annualBudget"].includes(field) ? Number(value) : value
+      [field]: normalizedValue
     }));
   }
 
@@ -314,6 +318,7 @@ function IntakePage({ buckets, onContinue, profile, updateProfile }) {
 function IntakeField({ config, profile, updateProfile }) {
   const value = profile[config.field] ?? "";
   const id = `field-${config.field}`;
+  const placeholder = String(organization[config.field] ?? "");
   return (
     <label className="field-block" htmlFor={id}>
       <span>{config.label}</span>
@@ -321,6 +326,7 @@ function IntakeField({ config, profile, updateProfile }) {
       {config.multiline ? (
         <textarea
           id={id}
+          placeholder={placeholder}
           value={value}
           onChange={(event) => updateProfile(config.field, event.target.value)}
         />
@@ -329,6 +335,7 @@ function IntakeField({ config, profile, updateProfile }) {
           id={id}
           min={config.type === "number" ? "0" : undefined}
           step={config.type === "number" ? "5000" : undefined}
+          placeholder={placeholder}
           type={config.type ?? "text"}
           value={value}
           onChange={(event) => updateProfile(config.field, event.target.value)}
@@ -356,7 +363,7 @@ function ShortlistPage({
       <header className="topbar split">
         <div>
           <p className="section-label">2. Funders worth your time</p>
-          <h2>Ranked shortlist for {profile.name}</h2>
+          <h2>Ranked shortlist for {profile.name || "your NGO"}</h2>
           <p>
             Pick a funder to build the brief. The highlighted row is the funder
             currently selected for Page 3.

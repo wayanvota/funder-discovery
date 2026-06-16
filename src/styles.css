@@ -216,6 +216,12 @@ button:active,
   line-height: 1.35;
 }
 
+.field-block input::placeholder,
+.field-block textarea::placeholder {
+  color: #9f9a92;
+  opacity: 1;
+}
+
 .field-block textarea {
   min-height: 92px;
   resize: vertical;
