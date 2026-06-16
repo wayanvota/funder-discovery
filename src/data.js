@@ -5,11 +5,20 @@ export const organization = {
   description:
     "A fictional US nonprofit helping community health organizations improve patient outreach, maternal health navigation, and multilingual benefits enrollment.",
   budget: "$4.2M",
+  annualBudget: 4200000,
   fundingGap: "$850K",
+  entityType: "501(c)(3) public charity",
   geography: "US, with California and multistate pilots",
+  targetPopulation:
+    "Low-income pregnant people, safety-net clinic patients, and multilingual families navigating benefits enrollment.",
   programFocus: "Maternal health navigation and multilingual benefits enrollment",
+  fundingUse:
+    "Navigator staff, partner training, benefits-enrollment workflow improvements, evaluation, and California pilot expansion.",
   askAmount: 340000,
+  projectStage: "Pilot with early expansion partners",
   evidenceLevel: "Pilot outcomes, partner letters, and baseline enrollment metrics still need strengthening.",
+  relationshipAssets:
+    "Community health center partners, maternal health coalitions, and possible warm paths through safety-net clinic networks.",
   proof:
     "Prototype assumes documented pilots with community health centers, enrollment navigators, and maternal health partners. Outcome proof is intentionally treated as incomplete until uploaded."
 };
@@ -488,9 +497,14 @@ export function adjustedDimensions(funder, profile = organization) {
   const profileText = [
     profile.name,
     profile.mission,
+    profile.entityType,
     profile.geography,
+    profile.targetPopulation,
     profile.programFocus,
-    profile.evidenceLevel
+    profile.fundingUse,
+    profile.projectStage,
+    profile.evidenceLevel,
+    profile.relationshipAssets
   ]
     .filter(Boolean)
     .join(" ")
@@ -536,6 +550,21 @@ export function adjustedDimensions(funder, profile = organization) {
   }
   if (includesAny(profileText, ["pilot", "baseline", "partner", "outcomes"])) {
     dimensions.evidence = clamp(dimensions.evidence + 6);
+  }
+
+  if (includesAny(profileText, ["evaluation", "study", "research", "comparison group"])) {
+    dimensions.evidence = clamp(dimensions.evidence + 5);
+    dimensions.history = clamp(dimensions.history + 3);
+  }
+
+  if (includesAny(profileText, ["board", "warm", "partner", "coalition", "peer grantee", "introduction"])) {
+    dimensions.relationship = clamp(dimensions.relationship + 8);
+  }
+
+  const annualBudget = Number(profile.annualBudget || 0);
+  if (annualBudget && askAmount > annualBudget * 0.35) {
+    dimensions.grantSize = clamp(dimensions.grantSize - 8);
+    dimensions.eligibilityRisk = clamp(dimensions.eligibilityRisk - 4);
   }
 
   return dimensions;

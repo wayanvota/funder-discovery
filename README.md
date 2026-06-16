@@ -4,6 +4,9 @@ Funder Discovery is a public-facing web app prototype for NGO leaders who need a
 
 ## What It Shows
 
+- Page 1 intake that asks for enough NGO and project context to inform matching
+- Page 2 ranked funder shortlist with a visible selected funder for briefing
+- Page 3 selected funder brief with evidence, warnings, ask plan, sources, and a funder switcher
 - NGO-specific funder fit scoring
 - 990 and 990-PF-backed evidence fields
 - Guideline-vs-990 warning severity
@@ -56,4 +59,3 @@ Render can deploy the site from GitHub and redeploy automatically on commits to 
 The funder ranking logic is deterministic and lives in `src/data.js`. The UI does not currently call an LLM or private API. This keeps the public prototype cheap to host and easy to audit.
 
 Before presenting the tool as production-grade, the data pipeline should add filing-year provenance, grant-recipient examples, confidence scoring for each extracted claim, and a "last verified" timestamp per funder.
-

@@ -14,6 +14,12 @@ import {
 } from "./data";
 import "./styles.css";
 
+const pages = [
+  { id: "intake", eyebrow: "1. Data input", title: "Tell us what needs funding" },
+  { id: "shortlist", eyebrow: "2. Ranked shortlist", title: "Funders worth your time" },
+  { id: "brief", eyebrow: "3. Funder brief", title: "Why this funder is or is not worth pursuing" }
+];
+
 const tabs = ["Evidence", "Warnings", "Ask plan", "Sources"];
 const filters = [
   "All",
@@ -30,8 +36,78 @@ const coreChecks = [
   "Do not pursue flags"
 ];
 
+const intakeFields = [
+  {
+    field: "name",
+    label: "Organization name",
+    helper: "Use the public name a funder would recognize in a proposal or Form 990 search.",
+    type: "text"
+  },
+  {
+    field: "entityType",
+    label: "Legal status",
+    helper: "Example: 501(c)(3), fiscally sponsored project, public agency, NGO outside the US.",
+    type: "text"
+  },
+  {
+    field: "annualBudget",
+    label: "Annual operating budget",
+    helper: "A rough number is fine. This helps flag asks that are too large for the organization.",
+    type: "number"
+  },
+  {
+    field: "geography",
+    label: "Geography served",
+    helper: "Name countries, states, counties, or cities. Geography mismatches are a major waste of time.",
+    type: "text"
+  },
+  {
+    field: "targetPopulation",
+    label: "Who benefits",
+    helper: "Be specific about populations, communities, or institutions served by the funded work.",
+    multiline: true
+  },
+  {
+    field: "programFocus",
+    label: "Program needing funding",
+    helper: "Describe the work in funder language: issue area, service model, and primary outcome.",
+    multiline: true
+  },
+  {
+    field: "fundingUse",
+    label: "What the grant would pay for",
+    helper: "Examples: staff, evaluation, field pilots, technology, regranting, policy research, training.",
+    multiline: true
+  },
+  {
+    field: "askAmount",
+    label: "Target ask",
+    helper: "Enter the grant amount you would like to request. The tool compares it with modeled ask ranges.",
+    type: "number"
+  },
+  {
+    field: "projectStage",
+    label: "Stage of work",
+    helper: "Example: idea, pilot, expansion, proven program, research study, policy campaign.",
+    type: "text"
+  },
+  {
+    field: "evidenceLevel",
+    label: "Evidence available",
+    helper: "List outcomes, partners, evaluations, baseline data, prior grants, or admit where proof is thin.",
+    multiline: true
+  },
+  {
+    field: "relationshipAssets",
+    label: "Relationship assets",
+    helper: "Name board members, partners, peer grantees, or warm paths that could unlock invitation-only funders.",
+    multiline: true
+  }
+];
+
 function App() {
   const [profile, setProfile] = useState(organization);
+  const [page, setPage] = useState("intake");
   const [selectedId, setSelectedId] = useState("chcf");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
@@ -40,18 +116,17 @@ function App() {
     Object.fromEntries(funders.map((funder) => [funder.id, funder.currentAsk]))
   );
 
-  const ranked = useMemo(
-    () => [...funders].sort((a, b) => fitScore(b, profile) - fitScore(a, profile)),
-    [profile]
-  );
-
-  const enriched = ranked.map((funder) => ({
-    ...funder,
-    score: fitScore(funder, profile),
-    dimensions: adjustedDimensions(funder, profile),
-    decision: decisionFor(funder, profile),
-    gap: guideline990Gap(funder, profile)
-  }));
+  const enriched = useMemo(() => {
+    return [...funders]
+      .sort((a, b) => fitScore(b, profile) - fitScore(a, profile))
+      .map((funder) => ({
+        ...funder,
+        score: fitScore(funder, profile),
+        dimensions: adjustedDimensions(funder, profile),
+        decision: decisionFor(funder, profile),
+        gap: guideline990Gap(funder, profile)
+      }));
+  }, [profile]);
 
   const filtered = enriched.filter((funder) => {
     const haystack = [
@@ -69,10 +144,8 @@ function App() {
     return matchesQuery && matchesFilter;
   });
 
-  const selected =
-    enriched.find((funder) => funder.id === selectedId) ?? enriched[0];
+  const selected = enriched.find((funder) => funder.id === selectedId) ?? enriched[0];
   const selectedAsk = asks[selected.id];
-  const risk = askRisk(selected, selectedAsk);
   const buckets = filters
     .filter((item) => item !== "All")
     .map((item) => ({
@@ -83,7 +156,7 @@ function App() {
   function updateProfile(field, value) {
     setProfile((current) => ({
       ...current,
-      [field]: field === "askAmount" ? Number(value) : value
+      [field]: ["askAmount", "annualBudget"].includes(field) ? Number(value) : value
     }));
   }
 
@@ -91,9 +164,15 @@ function App() {
     setAsks((current) => ({ ...current, [selected.id]: Number(value) }));
   }
 
+  function chooseFunder(id, nextPage = "brief") {
+    setSelectedId(id);
+    setActiveTab("Evidence");
+    setPage(nextPage);
+  }
+
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
+    <main className="site-shell">
+      <header className="site-header">
         <div className="brand-lockup">
           <div className="brand-mark">FD</div>
           <div>
@@ -101,294 +180,494 @@ function App() {
             <h1>Stop chasing the wrong funders.</h1>
           </div>
         </div>
-
-        <section className="org-panel intake-panel">
-          <p className="section-label">1. NGO Intake</p>
-          <label>
-            Organization
-            <input
-              value={profile.name}
-              onChange={(event) => updateProfile("name", event.target.value)}
-            />
-          </label>
-          <label>
-            Geography served
-            <input
-              value={profile.geography}
-              onChange={(event) => updateProfile("geography", event.target.value)}
-            />
-          </label>
-          <label>
-            Program needing funding
-            <textarea
-              value={profile.programFocus}
-              onChange={(event) => updateProfile("programFocus", event.target.value)}
-            />
-          </label>
-          <label>
-            Target ask
-            <input
-              type="number"
-              min="10000"
-              step="5000"
-              value={profile.askAmount}
-              onChange={(event) => updateProfile("askAmount", event.target.value)}
-            />
-          </label>
-          <label>
-            Evidence available
-            <textarea
-              value={profile.evidenceLevel}
-              onChange={(event) => updateProfile("evidenceLevel", event.target.value)}
-            />
-          </label>
-          <p className="model-note">
-            This preview reranks a curated 990-backed funder set from the intake
-            fields. The public version should expand ingestion across
-            ProPublica, IRS records, Kindora, and foundation websites.
-          </p>
-        </section>
-
-        <section className="scoring-panel">
-          <p className="section-label">Scoring Model</p>
-          <p className="model-note">
-            Scores are deterministic. The model ranks fit, then forces weak
-            prospects into research, benchmark, or do-not-pursue buckets.
-          </p>
-          {Object.entries(scoreWeights).map(([key, weight]) => (
-            <div className="weight-row" key={key}>
-              <span>{labelize(key)}</span>
-              <strong>{Math.round(weight * 100)}%</strong>
-            </div>
-          ))}
-        </section>
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="section-label">2. Ranked Shortlist</p>
-            <h2>Funders actually worth your time</h2>
-            <p>
-              Built for NGO leaders who need a defensible shortlist, not another
-              database to sort through.
-            </p>
-          </div>
-          <div className="source-strip" aria-label="Primary data sources">
-            <span>IRS-derived</span>
-            <span>990 / 990-PF</span>
-            <span>ProPublica</span>
-            <span>Official site</span>
-          </div>
-        </header>
-
-        <div className="proof-strip" aria-label="Core funder discovery checks">
-          {coreChecks.map((check) => (
-            <span key={check}>{check}</span>
-          ))}
-        </div>
-
-        <div className="bucket-grid">
-          {buckets.map((bucket) => (
+        <nav className="step-nav" aria-label="Funder Discovery pages">
+          {pages.map((item) => (
             <button
-              className={filter === bucket.label ? "bucket active" : "bucket"}
-              key={bucket.label}
-              onClick={() => setFilter(bucket.label)}
+              className={page === item.id ? "active" : ""}
+              key={item.id}
+              onClick={() => setPage(item.id)}
               type="button"
             >
-              <span>{bucket.label}</span>
-              <strong>{bucket.count}</strong>
+              <span>{item.eyebrow}</span>
+              <strong>{item.title}</strong>
             </button>
           ))}
-        </div>
+        </nav>
+      </header>
 
-        <div className="toolbar">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search funders, warnings, geographies"
-            aria-label="Search funders"
-          />
-          <div className="filter-row" aria-label="Prospect filters">
-            {filters.map((item) => (
-              <button
-                className={filter === item ? "active" : ""}
-                key={item}
-                onClick={() => setFilter(item)}
-                type="button"
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
+      {page === "intake" && (
+        <IntakePage
+          buckets={buckets}
+          onContinue={() => setPage("shortlist")}
+          profile={profile}
+          updateProfile={updateProfile}
+        />
+      )}
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Funder</th>
-                <th>Decision</th>
-                <th>Fit</th>
-                <th>Ask range</th>
-                <th>990 warning</th>
-                <th>Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((funder) => (
-                <tr
-                  className={funder.id === selected.id ? "selected" : ""}
-                  key={funder.id}
-                  onClick={() => {
-                    setSelectedId(funder.id);
-                    setActiveTab("Evidence");
-                  }}
-                >
-                  <td data-label="Funder">
-                    <button className="row-title" type="button">
-                      <strong>{funder.displayName}</strong>
-                      <span>
-                        EIN {funder.ein} | {funder.city}, {funder.state}
-                      </span>
-                    </button>
-                  </td>
-                  <td data-label="Decision">
-                    <DecisionPill decision={funder.decision} />
-                  </td>
-                  <td data-label="Fit">
-                    <Score score={funder.score} />
-                  </td>
-                  <td data-label="Ask range">
-                    {money(funder.askRange[0])} to {money(funder.askRange[1])}
-                  </td>
-                  <td data-label="990 warning">
-                    <span className={`gap-pill ${funder.gap.severity.toLowerCase()}`}>
-                      {funder.gap.severity}
-                    </span>
-                  </td>
-                  <td data-label="Confidence">
-                    {confidenceLabel(funder.dimensions.confidence)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {page === "shortlist" && (
+        <ShortlistPage
+          buckets={buckets}
+          enriched={enriched}
+          filter={filter}
+          filtered={filtered}
+          profile={profile}
+          query={query}
+          selected={selected}
+          setFilter={setFilter}
+          setPage={setPage}
+          setQuery={setQuery}
+          chooseFunder={chooseFunder}
+        />
+      )}
 
-      <aside className="briefing">
-        <section className="brief-card">
-          <div className="brief-head">
-            <div>
-              <p className="section-label">3. Funder Brief</p>
-              <h2>{selected.displayName}</h2>
-              <p>
-                {selected.type} | EIN {selected.ein}
-              </p>
-            </div>
-            <Score score={selected.score} />
-          </div>
-
-          <DecisionBanner funder={selected} />
-
-          <div className="metrics">
-            <Metric label="Assets" value={money(selected.assets)} />
-            <Metric label="Annual grants" value={money(selected.annualGrants)} />
-            <Metric label="Geography" value={selected.geography} />
-          </div>
-
-          <div className="score-breakdown">
-            <div className="breakdown-head">
-              <span>Score breakdown</span>
-              <strong>{selected.score}/100</strong>
-            </div>
-            {Object.entries(scoreWeights).map(([key, weight]) => {
-              const value = selected.dimensions[key];
-              return (
-                <div className="breakdown-row" key={key}>
-                  <div>
-                    <span>{labelize(key)}</span>
-                    <small>{Math.round(weight * 100)}% weight</small>
-                  </div>
-                  <meter min="0" max="100" value={value} />
-                  <strong>{value}</strong>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="ask-control">
-            <div className="ask-label">
-              <span>Recommended ask</span>
-              <strong>{money(selectedAsk)}</strong>
-            </div>
-            <div className="ask-buttons" aria-label="Adjust ask amount by 25,000 dollars">
-              <button
-                type="button"
-                onClick={() =>
-                  updateAsk(
-                    Math.max(
-                      Math.round(selected.askRange[0] * 0.6),
-                      selectedAsk - 25000
-                    )
-                  )
-                }
-              >
-                Lower ask
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  updateAsk(
-                    Math.min(
-                      Math.round(selected.askRange[1] * 1.45),
-                      selectedAsk + 25000
-                    )
-                  )
-                }
-              >
-                Raise ask
-              </button>
-            </div>
-            <input
-              type="range"
-              min={Math.round(selected.askRange[0] * 0.6)}
-              max={Math.round(selected.askRange[1] * 1.45)}
-              step="5000"
-              value={selectedAsk}
-              onChange={(event) => updateAsk(event.target.value)}
-              onInput={(event) => updateAsk(event.target.value)}
-              aria-label="Adjust ask amount"
-            />
-            <div className={`risk-callout ${risk.level.toLowerCase().replaceAll(" ", "-")}`}>
-              <strong>{risk.level}</strong>
-              <span>{risk.message}</span>
-            </div>
-          </div>
-
-          <nav className="tabs" aria-label="Briefing tabs">
-            {tabs.map((tab) => (
-              <button
-                className={activeTab === tab ? "active" : ""}
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                type="button"
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
-
-          <div className="tab-panel">
-            {activeTab === "Evidence" && <Evidence funder={selected} />}
-            {activeTab === "Warnings" && <Warnings funder={selected} />}
-            {activeTab === "Ask plan" && <AskPlan funder={selected} />}
-            {activeTab === "Sources" && <Sources funder={selected} />}
-          </div>
-        </section>
-      </aside>
+      {page === "brief" && (
+        <BriefPage
+          activeTab={activeTab}
+          enriched={enriched}
+          selected={selected}
+          selectedAsk={selectedAsk}
+          setActiveTab={setActiveTab}
+          setPage={setPage}
+          updateAsk={updateAsk}
+          chooseFunder={chooseFunder}
+        />
+      )}
     </main>
+  );
+}
+
+function IntakePage({ buckets, onContinue, profile, updateProfile }) {
+  return (
+    <section className="page-card intake-page">
+      <div className="page-hero">
+        <p className="section-label">1. Data input</p>
+        <h2>Enough context to avoid bad funder matches</h2>
+        <p>
+          The shortlist is only useful if the tool knows what the NGO actually
+          does, where it works, how much it needs, and how strong the evidence is.
+        </p>
+      </div>
+
+      <div className="intake-grid">
+        <form className="intake-form" onSubmit={(event) => event.preventDefault()}>
+          {intakeFields.map((field) => (
+            <IntakeField
+              config={field}
+              key={field.field}
+              profile={profile}
+              updateProfile={updateProfile}
+            />
+          ))}
+        </form>
+
+        <aside className="intake-aside">
+          <section className="brief-card">
+            <p className="section-label">What this changes</p>
+            <h3>Ranking inputs</h3>
+            <p>
+              These fields affect mission match, geography eligibility, ask-size
+              risk, relationship risk, and evidence confidence.
+            </p>
+            <div className="proof-strip stacked" aria-label="Core funder discovery checks">
+              {coreChecks.map((check) => (
+                <span key={check}>{check}</span>
+              ))}
+            </div>
+          </section>
+
+          <section className="brief-card">
+            <p className="section-label">Current model read</p>
+            <div className="bucket-grid compact">
+              {buckets.map((bucket) => (
+                <div className="bucket readonly" key={bucket.label}>
+                  <span>{bucket.label}</span>
+                  <strong>{bucket.count}</strong>
+                </div>
+              ))}
+            </div>
+            <button className="primary-action" onClick={onContinue} type="button">
+              Build ranked shortlist
+            </button>
+          </section>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function IntakeField({ config, profile, updateProfile }) {
+  const value = profile[config.field] ?? "";
+  const id = `field-${config.field}`;
+  return (
+    <label className="field-block" htmlFor={id}>
+      <span>{config.label}</span>
+      <small>{config.helper}</small>
+      {config.multiline ? (
+        <textarea
+          id={id}
+          value={value}
+          onChange={(event) => updateProfile(config.field, event.target.value)}
+        />
+      ) : (
+        <input
+          id={id}
+          min={config.type === "number" ? "0" : undefined}
+          step={config.type === "number" ? "5000" : undefined}
+          type={config.type ?? "text"}
+          value={value}
+          onChange={(event) => updateProfile(config.field, event.target.value)}
+        />
+      )}
+    </label>
+  );
+}
+
+function ShortlistPage({
+  buckets,
+  enriched,
+  filter,
+  filtered,
+  profile,
+  query,
+  selected,
+  setFilter,
+  setPage,
+  setQuery,
+  chooseFunder
+}) {
+  return (
+    <section className="page-card">
+      <header className="topbar split">
+        <div>
+          <p className="section-label">2. Funders worth your time</p>
+          <h2>Ranked shortlist for {profile.name}</h2>
+          <p>
+            Pick a funder to build the brief. The highlighted row is the funder
+            currently selected for Page 3.
+          </p>
+        </div>
+        <div className="source-strip" aria-label="Primary data sources">
+          <span>IRS-derived</span>
+          <span>990 / 990-PF</span>
+          <span>ProPublica</span>
+          <span>Official site</span>
+        </div>
+      </header>
+
+      <div className="shortlist-layout">
+        <section className="shortlist-main">
+          <div className="bucket-grid">
+            {buckets.map((bucket) => (
+              <button
+                className={filter === bucket.label ? "bucket active" : "bucket"}
+                key={bucket.label}
+                onClick={() => setFilter(bucket.label)}
+                type="button"
+              >
+                <span>{bucket.label}</span>
+                <strong>{bucket.count}</strong>
+              </button>
+            ))}
+          </div>
+
+          <div className="toolbar">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search funders, warnings, geographies"
+              aria-label="Search funders"
+            />
+            <div className="filter-row" aria-label="Prospect filters">
+              {filters.map((item) => (
+                <button
+                  className={filter === item ? "active" : ""}
+                  key={item}
+                  onClick={() => setFilter(item)}
+                  type="button"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <FunderTable
+            filtered={filtered}
+            selected={selected}
+            chooseFunder={(id) => chooseFunder(id, "shortlist")}
+          />
+        </section>
+
+        <aside className="selection-panel">
+          <p className="section-label">Selected for brief</p>
+          <h3>{selected.displayName}</h3>
+          <DecisionBanner funder={selected} />
+          <p>
+            Page 3 will explain the evidence, warnings, ask range, and next
+            action for this selected funder.
+          </p>
+          <div className="selected-actions">
+            <button className="secondary-action" onClick={() => setPage("intake")} type="button">
+              Edit intake
+            </button>
+            <button className="primary-action" onClick={() => setPage("brief")} type="button">
+              View funder brief
+            </button>
+          </div>
+          <div className="mini-list" aria-label="Change selected funder">
+            {enriched.slice(0, 5).map((funder) => (
+              <button
+                className={funder.id === selected.id ? "active" : ""}
+                key={funder.id}
+                onClick={() => chooseFunder(funder.id, "shortlist")}
+                type="button"
+              >
+                <span>{funder.displayName}</span>
+                <strong>{funder.score}</strong>
+              </button>
+            ))}
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function FunderTable({ filtered, selected, chooseFunder }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Funder</th>
+            <th>Decision</th>
+            <th>Fit</th>
+            <th>Ask range</th>
+            <th>990 warning</th>
+            <th>Confidence</th>
+            <th>Brief</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((funder) => (
+            <tr
+              className={funder.id === selected.id ? "selected" : ""}
+              key={funder.id}
+              onClick={() => chooseFunder(funder.id)}
+            >
+              <td data-label="Funder">
+                <button className="row-title" type="button">
+                  <strong>{funder.displayName}</strong>
+                  <span>
+                    EIN {funder.ein} | {funder.city}, {funder.state}
+                  </span>
+                </button>
+              </td>
+              <td data-label="Decision">
+                <DecisionPill decision={funder.decision} />
+              </td>
+              <td data-label="Fit">
+                <Score score={funder.score} />
+              </td>
+              <td data-label="Ask range">
+                {money(funder.askRange[0])} to {money(funder.askRange[1])}
+              </td>
+              <td data-label="990 warning">
+                <span className={`gap-pill ${funder.gap.severity.toLowerCase()}`}>
+                  {funder.gap.severity}
+                </span>
+              </td>
+              <td data-label="Confidence">
+                {confidenceLabel(funder.dimensions.confidence)}
+              </td>
+              <td data-label="Brief">
+                <button
+                  className="table-action"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    chooseFunder(funder.id);
+                  }}
+                  type="button"
+                >
+                  Select
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BriefPage({
+  activeTab,
+  enriched,
+  selected,
+  selectedAsk,
+  setActiveTab,
+  setPage,
+  updateAsk,
+  chooseFunder
+}) {
+  const risk = askRisk(selected, selectedAsk);
+  return (
+    <section className="page-card brief-page">
+      <header className="topbar split">
+        <div>
+          <p className="section-label">3. Funder brief</p>
+          <h2>{selected.displayName}</h2>
+          <p>
+            This brief belongs to the funder selected on Page 2. Change the funder
+            here or return to the shortlist to review the full ranking.
+          </p>
+        </div>
+        <div className="selected-actions">
+          <button className="secondary-action" onClick={() => setPage("shortlist")} type="button">
+            Back to shortlist
+          </button>
+          <button className="secondary-action" onClick={() => setPage("intake")} type="button">
+            Edit intake
+          </button>
+        </div>
+      </header>
+
+      <div className="brief-layout">
+        <aside className="selection-panel">
+          <p className="section-label">Change funder brief</p>
+          <div className="mini-list" aria-label="Choose a different funder brief">
+            {enriched.map((funder) => (
+              <button
+                className={funder.id === selected.id ? "active" : ""}
+                key={funder.id}
+                onClick={() => chooseFunder(funder.id, "brief")}
+                type="button"
+              >
+                <span>{funder.displayName}</span>
+                <strong>{funder.score}</strong>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <FunderBrief
+          activeTab={activeTab}
+          risk={risk}
+          selected={selected}
+          selectedAsk={selectedAsk}
+          setActiveTab={setActiveTab}
+          updateAsk={updateAsk}
+        />
+      </div>
+    </section>
+  );
+}
+
+function FunderBrief({ activeTab, risk, selected, selectedAsk, setActiveTab, updateAsk }) {
+  return (
+    <section className="brief-card full-brief">
+      <div className="brief-head">
+        <div>
+          <p className="section-label">Selected funder</p>
+          <h2>{selected.displayName}</h2>
+          <p>
+            {selected.type} | EIN {selected.ein}
+          </p>
+        </div>
+        <Score score={selected.score} />
+      </div>
+
+      <DecisionBanner funder={selected} />
+
+      <div className="metrics">
+        <Metric label="Assets" value={money(selected.assets)} />
+        <Metric label="Annual grants" value={money(selected.annualGrants)} />
+        <Metric label="Geography" value={selected.geography} />
+      </div>
+
+      <div className="score-breakdown">
+        <div className="breakdown-head">
+          <span>Score breakdown</span>
+          <strong>{selected.score}/100</strong>
+        </div>
+        {Object.entries(scoreWeights).map(([key, weight]) => {
+          const value = selected.dimensions[key];
+          return (
+            <div className="breakdown-row" key={key}>
+              <div>
+                <span>{labelize(key)}</span>
+                <small>{Math.round(weight * 100)}% weight</small>
+              </div>
+              <meter min="0" max="100" value={value} />
+              <strong>{value}</strong>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="ask-control">
+        <div className="ask-label">
+          <span>Recommended ask</span>
+          <strong>{money(selectedAsk)}</strong>
+        </div>
+        <div className="ask-buttons" aria-label="Adjust ask amount by 25,000 dollars">
+          <button
+            type="button"
+            onClick={() =>
+              updateAsk(
+                Math.max(Math.round(selected.askRange[0] * 0.6), selectedAsk - 25000)
+              )
+            }
+          >
+            Lower ask
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              updateAsk(
+                Math.min(Math.round(selected.askRange[1] * 1.45), selectedAsk + 25000)
+              )
+            }
+          >
+            Raise ask
+          </button>
+        </div>
+        <input
+          type="range"
+          min={Math.round(selected.askRange[0] * 0.6)}
+          max={Math.round(selected.askRange[1] * 1.45)}
+          step="5000"
+          value={selectedAsk}
+          onChange={(event) => updateAsk(event.target.value)}
+          onInput={(event) => updateAsk(event.target.value)}
+          aria-label="Adjust ask amount"
+        />
+        <div className={`risk-callout ${risk.level.toLowerCase().replaceAll(" ", "-")}`}>
+          <strong>{risk.level}</strong>
+          <span>{risk.message}</span>
+        </div>
+      </div>
+
+      <nav className="tabs" aria-label="Briefing tabs">
+        {tabs.map((tab) => (
+          <button
+            className={activeTab === tab ? "active" : ""}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            type="button"
+          >
+            {tab}
+          </button>
+        ))}
+      </nav>
+
+      <div className="tab-panel">
+        {activeTab === "Evidence" && <Evidence funder={selected} />}
+        {activeTab === "Warnings" && <Warnings funder={selected} />}
+        {activeTab === "Ask plan" && <AskPlan funder={selected} />}
+        {activeTab === "Sources" && <Sources funder={selected} />}
+      </div>
+    </section>
   );
 }
 
@@ -410,7 +689,10 @@ function Evidence({ funder }) {
     <div className="stack">
       <Block title="990-backed evidence" body={funder.evidence} />
       <Block title="Eligibility and geography" body={funder.eligibility} />
-      <Block title="Source confidence" body={`${confidenceLabel(funder.dimensions.confidence)} confidence based on available public-record and official-site signals.`} />
+      <Block
+        title="Source confidence"
+        body={`${confidenceLabel(funder.dimensions.confidence)} confidence based on available public-record and official-site signals.`}
+      />
     </div>
   );
 }
