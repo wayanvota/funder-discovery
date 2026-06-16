@@ -66,6 +66,14 @@ function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Number(value) || 0));
 }
 
+function normalizeDimension(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  if (number > 0 && number <= 5) return clamp(number * 20);
+  if (number > 5 && number <= 10) return clamp(number * 10);
+  return clamp(number);
+}
+
 function normalizeUrl(value) {
   return typeof value === "string" && value.startsWith("http") ? value : "";
 }
@@ -86,7 +94,7 @@ function normalizeFunder(raw, index) {
   const maxAsk = Number(raw.askRange?.[1] || raw.askMax || minAsk * 2);
   const dimensions = raw.dimensions || {};
 
-  return {
+  const normalized = {
     id: slug(raw.id || name, index),
     legalName: String(raw.legalName || name),
     displayName: name,
@@ -123,17 +131,24 @@ function normalizeFunder(raw, index) {
         }))
       : [{ label: "Dynamic search", value: "Returned by backend discovery. Verify before outreach." }],
     dimensions: {
-      mission: clamp(dimensions.mission ?? 70),
-      geography: clamp(dimensions.geography ?? 65),
-      grantSize: clamp(dimensions.grantSize ?? 65),
-      evidence: clamp(dimensions.evidence ?? 60),
-      history: clamp(dimensions.history ?? 55),
-      eligibilityRisk: clamp(dimensions.eligibilityRisk ?? 55),
-      timing: clamp(dimensions.timing ?? 55),
-      relationship: clamp(dimensions.relationship ?? 45),
-      confidence: clamp(dimensions.confidence ?? 60)
+      mission: normalizeDimension(dimensions.mission, 70),
+      geography: normalizeDimension(dimensions.geography, 65),
+      grantSize: normalizeDimension(dimensions.grantSize, 65),
+      evidence: normalizeDimension(dimensions.evidence, 60),
+      history: normalizeDimension(dimensions.history, 55),
+      eligibilityRisk: normalizeDimension(dimensions.eligibilityRisk, 55),
+      timing: normalizeDimension(dimensions.timing, 55),
+      relationship: normalizeDimension(dimensions.relationship, 45),
+      confidence: normalizeDimension(dimensions.confidence, 60)
     }
   };
+
+  const missingPublicRecord = normalized.ein === "Unknown" && !normalized.propublicaUrl;
+  const missingEvidenceLink = !normalized.officialEvidenceUrl;
+  const confidencePenalty = (missingPublicRecord ? 18 : 0) + (missingEvidenceLink ? 10 : 0);
+  normalized.dimensions.confidence = clamp(normalized.dimensions.confidence - confidencePenalty);
+
+  return normalized;
 }
 
 function buildDiscoveryPrompt(profile) {
@@ -150,6 +165,8 @@ Rules:
 - Include do-not-pursue flags when geography, invitation-only access, grant size, or evidence make outreach wasteful.
 - Estimate askRange from visible grant patterns when possible. If not available, be conservative.
 - Every funder must include source links. Use ProPublica URL when you can identify an EIN.
+- All dimensions must be integers from 0 to 100, not 1 to 5.
+- Make the message count match the funders array length.
 - Be skeptical. A foundation website priority is not proof of recent grantmaking.
 - Return valid JSON only. No Markdown.
 
@@ -243,7 +260,7 @@ async function discoverFunders(profile) {
   }
 
   return {
-    message: result.message || `Found ${funders.length} dynamically discovered funders.`,
+    message: `Found ${funders.length} dynamically discovered funders.`,
     funders
   };
 }
