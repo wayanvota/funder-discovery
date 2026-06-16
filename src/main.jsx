@@ -36,6 +36,9 @@ const coreChecks = [
   "Do not pursue flags"
 ];
 
+const seedFundersNote =
+  "This public prototype currently reranks a curated 990-backed seed set. It does not yet search Kindora, ProPublica, IRS, or foundation sites for new funders.";
+
 const intakeFields = [
   {
     field: "name",
@@ -271,6 +274,7 @@ function IntakePage({ buckets, onContinue, profile, updateProfile }) {
               These fields affect mission match, geography eligibility, ask-size
               risk, relationship risk, and evidence confidence.
             </p>
+            <p className="model-note">{seedFundersNote}</p>
             <div className="proof-strip stacked" aria-label="Core funder discovery checks">
               {coreChecks.map((check) => (
                 <span key={check}>{check}</span>
@@ -289,7 +293,7 @@ function IntakePage({ buckets, onContinue, profile, updateProfile }) {
               ))}
             </div>
             <button className="primary-action" onClick={onContinue} type="button">
-              Build ranked shortlist
+              Rank current funder set
             </button>
           </section>
         </aside>
@@ -348,6 +352,7 @@ function ShortlistPage({
             Pick a funder to build the brief. The highlighted row is the funder
             currently selected for Page 3.
           </p>
+          <p className="model-note">{seedFundersNote}</p>
         </div>
         <div className="source-strip" aria-label="Primary data sources">
           <span>IRS-derived</span>
@@ -359,6 +364,8 @@ function ShortlistPage({
 
       <div className="shortlist-layout">
         <section className="shortlist-main">
+          <SeedSetWarning profile={profile} />
+
           <div className="bucket-grid">
             {buckets.map((bucket) => (
               <button
@@ -432,6 +439,42 @@ function ShortlistPage({
           </div>
         </aside>
       </div>
+    </section>
+  );
+}
+
+function SeedSetWarning({ profile }) {
+  const profileText = [
+    profile.geography,
+    profile.targetPopulation,
+    profile.programFocus,
+    profile.fundingUse
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const likelyOutsideSeed = [
+    "south asia",
+    "india",
+    "bangladesh",
+    "nepal",
+    "africa",
+    "latin america",
+    "global"
+  ].some((term) => profileText.includes(term));
+
+  if (!likelyOutsideSeed) return null;
+
+  return (
+    <section className="warning-panel">
+      <p className="section-label">Prototype limitation</p>
+      <h3>This is not a complete funder search yet</h3>
+      <p>
+        Your intake points to international or South Asia work, but the current
+        public prototype only reranks the seed funders already in the app. A real
+        version needs the Render backend to query funder data sources and return a
+        new shortlist before scoring.
+      </p>
     </section>
   );
 }

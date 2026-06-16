@@ -289,6 +289,23 @@ button:active,
   top: 20px;
 }
 
+.warning-panel {
+  border: 1px solid color-mix(in srgb, var(--warn) 38%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #fe4c02 8%, #faf9f6);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.warning-panel h3 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.warning-panel p:last-child {
+  margin-bottom: 0;
+}
+
 .selection-panel h3 {
   font-size: 28px;
   margin-bottom: 12px;
