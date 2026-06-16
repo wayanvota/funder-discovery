@@ -11,5 +11,3 @@ services:
         value: https://wayan.com
       - key: HOST
         value: 0.0.0.0
-      - key: OPENAI_API_KEY
-        sync: false
