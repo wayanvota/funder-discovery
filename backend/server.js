@@ -3,6 +3,7 @@ import http from "node:http";
 const port = Number(process.env.PORT || 10000);
 const host = process.env.HOST || "127.0.0.1";
 const publicOrigin = process.env.PUBLIC_ORIGIN || "https://wayan.com";
+const discoveryTimeoutMs = Number(process.env.DISCOVERY_TIMEOUT_MS || 60000);
 
 function allowedOrigin(request) {
   const origin = request.headers.origin;
@@ -161,6 +162,7 @@ ${JSON.stringify(profile, null, 2)}
 
 Rules:
 - Return only funders that a US 501(c)(3) could plausibly pursue.
+- Exclude unnamed records, fiscal sponsors, consultants, peer nonprofits, vendors, and intermediaries that are not actually grantmakers.
 - If the NGO works overseas, geography fit must be explicit. Do not treat US-only funders as fits.
 - Include do-not-pursue flags when geography, invitation-only access, grant size, or evidence make outreach wasteful.
 - Estimate askRange from visible grant patterns when possible. If not available, be conservative.
@@ -228,20 +230,36 @@ async function discoverFunders(profile) {
     throw error;
   }
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
-      tools: [{ type: "web_search", search_context_size: "low" }],
-      max_output_tokens: 5000,
-      store: false,
-      input: buildDiscoveryPrompt(profile)
-    })
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), discoveryTimeoutMs);
+  let response;
+
+  try {
+    response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json"
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-5.4-mini",
+        tools: [{ type: "web_search", search_context_size: "low" }],
+        max_output_tokens: 5000,
+        store: false,
+        input: buildDiscoveryPrompt(profile)
+      })
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      const timeoutError = new Error("Dynamic discovery timed out. Try a narrower geography, clearer program focus, or run the search again.");
+      timeoutError.statusCode = 504;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const payload = await response.json();
   if (!response.ok) {
@@ -252,7 +270,11 @@ async function discoverFunders(profile) {
   }
 
   const result = parseJsonObject(extractOutputText(payload));
-  const funders = Array.isArray(result.funders) ? result.funders.map(normalizeFunder) : [];
+  const funders = Array.isArray(result.funders)
+    ? result.funders
+        .map(normalizeFunder)
+        .filter((funder) => !/^unknown\b/i.test(funder.displayName) && funder.officialUrl)
+    : [];
   if (!funders.length) {
     const error = new Error("Dynamic discovery returned no funders.");
     error.statusCode = 502;
