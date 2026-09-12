@@ -43,6 +43,10 @@ audits passed. The first run passed 19 of 20 because the test client converted
 the malformed body into valid JSON; the corrected raw-request test passed in the
 complete rerun.
 
+[GitHub Actions run 34667443393](https://github.com/wayanvota/funder-discovery/actions/runs/34667443393)
+passed the production build, all 20 categories in Chromium, clean installs, and
+both dependency audits on Node 22.16.0.
+
 ## Defects fixed
 
 - Direct API callers could bypass all browser-side profile validation. The
