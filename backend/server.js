@@ -4,6 +4,8 @@ const port = Number(process.env.PORT || 10000);
 const host = process.env.HOST || "127.0.0.1";
 const publicOrigin = process.env.PUBLIC_ORIGIN || "https://wayan.com";
 const discoveryTimeoutMs = Number(process.env.DISCOVERY_TIMEOUT_MS || 60000);
+const openAIBaseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+const bodyLimitBytes = 200_000;
 
 function allowedOrigin(request) {
   const origin = request.headers.origin;
@@ -32,15 +34,27 @@ function sendJson(request, response, status, payload, extraHeaders = {}) {
 function readBody(request) {
   return new Promise((resolve, reject) => {
     let body = "";
+    let bytes = 0;
+    let rejected = false;
     request.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 200_000) {
-        reject(new Error("Request body too large"));
-        request.destroy();
+      if (rejected) return;
+      bytes += chunk.length;
+      if (bytes > bodyLimitBytes) {
+        rejected = true;
+        const error = new Error("Request body too large");
+        error.statusCode = 413;
+        error.code = "request_too_large";
+        reject(error);
+        return;
       }
+      body += chunk;
     });
-    request.on("end", () => resolve(body));
-    request.on("error", reject);
+    request.on("end", () => {
+      if (!rejected) resolve(body);
+    });
+    request.on("error", (error) => {
+      if (!rejected) reject(error);
+    });
   });
 }
 
@@ -76,7 +90,73 @@ function normalizeDimension(value, fallback) {
 }
 
 function normalizeUrl(value) {
-  return typeof value === "string" && value.startsWith("http") ? value : "";
+  if (typeof value !== "string") return "";
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+      return "";
+    }
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+const profileStringFields = [
+  "name",
+  "entityType",
+  "geography",
+  "targetPopulation",
+  "programFocus",
+  "fundingUse",
+  "projectStage",
+  "evidenceLevel",
+  "relationshipAssets"
+];
+
+function invalidProfile(message) {
+  const error = new Error(message);
+  error.statusCode = 422;
+  error.code = "invalid_profile";
+  return error;
+}
+
+function validateDiscoveryProfile(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw invalidProfile("A structured NGO profile is required.");
+  }
+
+  const profile = {};
+  for (const field of profileStringFields) {
+    const value = typeof raw[field] === "string" ? raw[field].trim() : "";
+    if (value.length > 10_000) {
+      throw invalidProfile(`Profile field ${field} is too long.`);
+    }
+    profile[field] = value;
+  }
+
+  for (const field of [
+    "name",
+    "entityType",
+    "geography",
+    "targetPopulation",
+    "programFocus",
+    "fundingUse"
+  ]) {
+    if (!profile[field]) {
+      throw invalidProfile(`Profile field ${field} is required.`);
+    }
+  }
+
+  for (const field of ["annualBudget", "askAmount"]) {
+    const value = Number(raw[field]);
+    if (!Number.isFinite(value) || value <= 0 || value > 10_000_000_000) {
+      throw invalidProfile(`Profile field ${field} must be a positive, realistic number.`);
+    }
+    profile[field] = value;
+  }
+
+  return profile;
 }
 
 function slug(value, index) {
@@ -331,7 +411,7 @@ async function discoverFunders(profile) {
   let response;
 
   try {
-    response = await fetch("https://api.openai.com/v1/responses", {
+    response = await fetch(`${openAIBaseUrl}/responses`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
@@ -409,7 +489,7 @@ const server = http.createServer(async (request, response) => {
     try {
       const body = await readBody(request);
       const payload = body ? JSON.parse(body) : {};
-      const profile = payload.profile || {};
+      const profile = validateDiscoveryProfile(payload.profile);
       const result = await discoverFunders(profile);
 
       return sendJson(request, response, 200, {
@@ -421,7 +501,9 @@ const server = http.createServer(async (request, response) => {
     } catch (error) {
       return sendJson(request, response, error.statusCode || 400, {
         ok: false,
-        code: error.statusCode === 503 ? "openai_not_configured" : "dynamic_discovery_failed",
+        code:
+          error.code ||
+          (error.statusCode === 503 ? "openai_not_configured" : "dynamic_discovery_failed"),
         message: error.message
       });
     }
