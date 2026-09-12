@@ -51,6 +51,26 @@ npm run build
 
 The static build is emitted to `dist/`.
 
+## End-to-end tests
+
+The release contract runs 10 user workflows and 10 adversarial cases through a
+production Vite build, Chromium, the running Node backend, and an isolated fake
+OpenAI Responses API. Its nonprofit and funder records are fictional. GitHub
+Actions receives no OpenAI key and makes no provider call.
+
+```bash
+npm ci
+npm ci --prefix backend
+npx playwright install chromium
+npm run test:ci
+npm audit --audit-level=high
+npm audit --prefix backend --audit-level=high
+```
+
+See [`E2E-TEST-REPORT.md`](E2E-TEST-REPORT.md) for the category ledger, findings,
+and extension rules. A live smoke test is separate from CI and requires explicit
+authorization for a locally supplied key and synthetic profile.
+
 ## Static Deployment On wayan.com
 
 The public frontend should live on Wayan's existing website:
@@ -84,7 +104,7 @@ Render backend settings:
 
 - Runtime: Node
 - Root directory: `backend`
-- Build command: `npm install`
+- Build command: `npm ci`
 - Start command: `npm start`
 - Health path: `/api/health`
 
@@ -95,6 +115,10 @@ The backend currently exposes:
 - `POST /api/report`, reserved for future OpenAI-generated reports
 
 Set `OPENAI_API_KEY` in Render for dynamic funder discovery. Do not expose API keys in the browser. Optional: set `OPENAI_MODEL`; otherwise the backend uses `gpt-5.4-mini`.
+
+`OPENAI_BASE_URL` defaults to the official OpenAI API. It exists so the test
+harness can direct requests to a local fake provider; production should leave it
+unset.
 
 ## Audit Notes
 
